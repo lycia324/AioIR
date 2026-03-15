@@ -68,7 +68,7 @@ def test_Denoise(net, dataset, sigma=15):
             # save_image_tensor(restored, output_path + clean_name[0] + '.png')
 
         print("Denoise sigma=%d: psnr: %.2f, ssim: %.4f" % (sigma, psnr.avg, ssim.avg))
-
+        return [psnr.avg, ssim.avg]
 
 def test_Derain_Dehaze(net, dataset, task="derain"):
     output_path = testopt.output_path + task + '/'
@@ -92,12 +92,13 @@ def test_Derain_Dehaze(net, dataset, task="derain"):
 
             # save_image_tensor(restored, output_path + degraded_name[0] + '.png')
         print("PSNR: %.2f, SSIM: %.4f" % (psnr.avg, ssim.avg))
+        return [psnr.avg, ssim.avg]
 
 def print_test_result(results: dict):
     task_num = len(results)
     avg_psnr = avg_ssim = 0.
     print("\n================ Summary ================")
-    for task_name, (task_psnr, task_ssim) in results:
+    for task_name, (task_psnr, task_ssim) in results.items():
         print(f"{task_name:<28} | PSNR: {task_psnr:.2f} | SSIM: {task_ssim:.4f}")
         avg_psnr += task_psnr
         avg_ssim += task_ssim
@@ -180,43 +181,43 @@ if __name__ == '__main__':
         for name in derain_splits:
             print('Start testing {} rain streak removal...'.format(name))
             testopt.derain_path = os.path.join(derain_base_path,name)
-            derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15)
+            derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15, task='derain')
             test_Derain_Dehaze(net, derain_set, task="derain")
 
     elif testopt.mode == 'dehaze':
         print('Start testing SOTS...')
         derain_base_path = testopt.derain_path
         name = derain_splits[0]
-        testopt.derain_path = os.path.join(derain_base_path,name)
-        derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15)
-        test_Derain_Dehaze(net, derain_set, task="dehaze")
+        testopt.derain_path = os.path.join(derain_base_path, name)
+        dehaze_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15, task='dehaze')
+        test_Derain_Dehaze(net, dehaze_set, task="dehaze")
 
     elif testopt.mode == 'deblur':
         print('Start testing GOPRO...')
         deblur_base_path = testopt.gopro_path
         name = deblur_splits[0]
-        testopt.gopro_path = os.path.join(deblur_base_path,name)
-        derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15, task='deblur')
-        test_Derain_Dehaze(net, derain_set, task="deblur")
+        testopt.gopro_path = os.path.join(deblur_base_path, name)
+        deblur_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15, task='deblur')
+        test_Derain_Dehaze(net, deblur_set, task="deblur")
 
     elif testopt.mode == 'enhance':
         print('Start testing LOL...')
         enhance_base_path = testopt.enhance_path
-        name = derain_splits[0]
-        testopt.enhance_path = os.path.join(enhance_base_path,name, task='enhance')
-        derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15)
-        test_Derain_Dehaze(net, derain_set, task="enhance")
+        name = enhance_splits[0]
+        testopt.enhance_path = os.path.join(enhance_base_path, name)
+        enhance_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15, task='enhance')
+        test_Derain_Dehaze(net, enhance_set, task="enhance")
 
     elif testopt.mode == '3task':
         for testset,name in zip(denoise_tests,denoise_splits) :
             print('Start {} testing Sigma=15...'.format(name))
-            test_Denoise(net, testset, sigma=15)
+            test_result['denoise-15'] = test_Denoise(net, testset, sigma=15)
 
             print('Start {} testing Sigma=25...'.format(name))
-            test_Denoise(net, testset, sigma=25)
+            test_result['denoise-25'] = test_Denoise(net, testset, sigma=25)
 
             print('Start {} testing Sigma=50...'.format(name))
-            test_Denoise(net, testset, sigma=50)
+            test_result['denoise-50'] = test_Denoise(net, testset, sigma=50)
 
         derain_base_path = testopt.derain_path
         print(derain_splits)
@@ -225,28 +226,13 @@ if __name__ == '__main__':
             print('Start testing {} rain streak removal...'.format(name))
             testopt.derain_path = os.path.join(derain_base_path,name)
             derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=55)
-            test_Derain_Dehaze(net, derain_set, task="derain")
+            test_result['derain'] = test_Derain_Dehaze(net, derain_set, task="derain")
 
         print('Start testing SOTS...')
-        test_Derain_Dehaze(net, derain_set, task="dehaze")
+        test_result['dehaze'] = test_Derain_Dehaze(net, derain_set, task="dehaze")
+        print_test_result(test_result)
 
     elif testopt.mode == '5task':
-        for testset,name in zip(denoise_tests,denoise_splits) :
-            print('Start {} testing Sigma=25...'.format(name))
-            test_Denoise(net, testset, sigma=25)
-
-        derain_base_path = testopt.derain_path
-        print(derain_splits)
-        for name in derain_splits:
-
-            print('Start testing {} rain streak removal...'.format(name))
-            testopt.derain_path = os.path.join(derain_base_path,name)
-            derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=55)
-            test_Derain_Dehaze(net, derain_set, task="derain")
-
-        print('Start testing SOTS...')
-        test_Derain_Dehaze(net, derain_set, task="dehaze")
-
         deblur_base_path = testopt.gopro_path
         for name in deblur_splits:
             print('Start testing GOPRO...')
@@ -254,7 +240,22 @@ if __name__ == '__main__':
             # print('Start testing {} rain streak removal...'.format(name))
             testopt.gopro_path = os.path.join(deblur_base_path,name)
             deblur_set = DerainDehazeDataset(testopt,addnoise=False,sigma=55, task='deblur')
-            test_Derain_Dehaze(net, deblur_set, task="deblur")
+            test_result['deblur'] = test_Derain_Dehaze(net, deblur_set, task="deblur")
+        for testset,name in zip(denoise_tests,denoise_splits) :
+            print('Start {} testing Sigma=25...'.format(name))
+            test_result['denoise-25'] = test_Denoise(net, testset, sigma=25)
+
+        derain_base_path = testopt.derain_path
+        print(derain_splits)
+        for name in derain_splits:
+
+            print('Start testing {} rain streak removal...'.format(name))
+            testopt.derain_path = os.path.join(derain_base_path,name)
+            derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=55)
+            test_result['derain'] = test_Derain_Dehaze(net, derain_set, task="derain")
+
+        print('Start testing SOTS...')
+        test_result['dehaze'] = test_Derain_Dehaze(net, derain_set, task="dehaze")
 
         enhance_base_path = testopt.enhance_path
         for name in enhance_splits:
@@ -262,4 +263,5 @@ if __name__ == '__main__':
             print('Start testing LOL...')
             testopt.enhance_path = os.path.join(enhance_base_path,name)
             derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=55, task='enhance')
-            test_Derain_Dehaze(net, derain_set, task="enhance")
+            test_result['enhance'] = test_Derain_Dehaze(net, derain_set, task="enhance")
+        print_test_result(test_result)
