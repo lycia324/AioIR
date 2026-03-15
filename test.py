@@ -93,6 +93,17 @@ def test_Derain_Dehaze(net, dataset, task="derain"):
             save_image_tensor(restored, output_path + degraded_name[0] + '.png')
         print("PSNR: %.2f, SSIM: %.4f" % (psnr.avg, ssim.avg))
 
+def print_test_result(results: dict):
+    task_num = len(results)
+    avg_psnr = avg_ssim = 0.
+    print("\n================ Summary ================")
+    for task_name, (task_psnr, task_ssim) in results:
+        print(f"{task_name:<28} | PSNR: {task_psnr:.2f} | SSIM: {task_ssim:.4f}")
+        avg_psnr += task_psnr
+        avg_ssim += task_ssim
+    avg_psnr, avg_ssim = avg_psnr / task_num, avg_ssim / task_num
+    print("------------------------------------------------")
+    print(f"Average                      | PSNR: {avg_psnr:.2f} | SSIM: {avg_ssim:.4f}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -135,6 +146,8 @@ if __name__ == '__main__':
 
     net  = AdaIRModel().load_from_checkpoint(ckpt_path).cuda()
     net.eval()
+
+    test_result = {}
 
     if testopt.mode == 0:
         for testset,name in zip(denoise_tests,denoise_splits) :
