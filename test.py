@@ -65,7 +65,7 @@ def test_Denoise(net, dataset, sigma=15):
 
             psnr.update(temp_psnr, N)
             ssim.update(temp_ssim, N)
-            save_image_tensor(restored, output_path + clean_name[0] + '.png')
+            # save_image_tensor(restored, output_path + clean_name[0] + '.png')
 
         print("Denoise sigma=%d: psnr: %.2f, ssim: %.4f" % (sigma, psnr.avg, ssim.avg))
 
@@ -90,7 +90,7 @@ def test_Derain_Dehaze(net, dataset, task="derain"):
             psnr.update(temp_psnr, N)
             ssim.update(temp_ssim, N)
 
-            save_image_tensor(restored, output_path + degraded_name[0] + '.png')
+            # save_image_tensor(restored, output_path + degraded_name[0] + '.png')
         print("PSNR: %.2f, SSIM: %.4f" % (psnr.avg, ssim.avg))
 
 def print_test_result(results: dict):
@@ -109,8 +109,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # Input Parameters
     parser.add_argument('--cuda', type=int, default=0)
-    parser.add_argument('--mode', type=int, default=6,
-                        help='0 for denoise, 1 for derain, 2 for dehaze, 3 for deblur, 4 for enhance, 5 for all-in-one (three tasks), 6 for all-in-one (five tasks)')
+    parser.add_argument('--mode', type=str, default='3task',
+                        help='single task: derain, dehaze, deblur, denoise, enhance / all in one: 3task or 5task')
     
     parser.add_argument('--gopro_path', type=str, default="data/test/deblur/", help='save path of test hazy images')
     parser.add_argument('--enhance_path', type=str, default="data/test/enhance/", help='save path of test hazy images')
@@ -143,13 +143,27 @@ if __name__ == '__main__':
         denoise_tests.append(denoise_testset)
 
     print("CKPT name : {}".format(ckpt_path))
-
-    net  = AdaIRModel().load_from_checkpoint(ckpt_path).cuda()
+    from net.OriSSM_super_better import OriSSM_better
+    # net  = AdaIRModel().load_from_checkpoint(ckpt_path).cuda()
+    # net.eval()
+    ckpt = torch.load(ckpt_path, map_location="cpu")
+    sd = ckpt.get("state_dict", ckpt)  # Lightning ckpt or plain state_dict
+    sd = {k.replace("net.", "", 1): v for k, v in sd.items() if k.startswith("net.")}
+    net = OriSSM_better(
+        inp_channels=3,
+        out_channels=3,
+        dim=48,
+        num_blocks=[4, 4, 6],
+        patch_size=8,
+        num_orient=6,
+        is_eval=True
+    ).cuda()
+    net.load_state_dict(sd)
     net.eval()
 
     test_result = {}
 
-    if testopt.mode == 0:
+    if testopt.mode == 'denoise':
         for testset,name in zip(denoise_tests,denoise_splits) :
             print('Start {} testing Sigma=15...'.format(name))
             test_Denoise(net, testset, sigma=15)
@@ -160,7 +174,7 @@ if __name__ == '__main__':
             print('Start {} testing Sigma=50...'.format(name))
             test_Denoise(net, testset, sigma=50)
 
-    elif testopt.mode == 1:
+    elif testopt.mode == 'derain':
         print('Start testing rain streak removal...')
         derain_base_path = testopt.derain_path
         for name in derain_splits:
@@ -169,7 +183,7 @@ if __name__ == '__main__':
             derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15)
             test_Derain_Dehaze(net, derain_set, task="derain")
 
-    elif testopt.mode == 2:
+    elif testopt.mode == 'dehaze':
         print('Start testing SOTS...')
         derain_base_path = testopt.derain_path
         name = derain_splits[0]
@@ -177,7 +191,7 @@ if __name__ == '__main__':
         derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15)
         test_Derain_Dehaze(net, derain_set, task="dehaze")
 
-    elif testopt.mode == 3:
+    elif testopt.mode == 'deblur':
         print('Start testing GOPRO...')
         deblur_base_path = testopt.gopro_path
         name = deblur_splits[0]
@@ -185,7 +199,7 @@ if __name__ == '__main__':
         derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15, task='deblur')
         test_Derain_Dehaze(net, derain_set, task="deblur")
 
-    elif testopt.mode == 4:
+    elif testopt.mode == 'enhance':
         print('Start testing LOL...')
         enhance_base_path = testopt.enhance_path
         name = derain_splits[0]
@@ -193,7 +207,7 @@ if __name__ == '__main__':
         derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=15)
         test_Derain_Dehaze(net, derain_set, task="enhance")
 
-    elif testopt.mode == 5:
+    elif testopt.mode == '3task':
         for testset,name in zip(denoise_tests,denoise_splits) :
             print('Start {} testing Sigma=15...'.format(name))
             test_Denoise(net, testset, sigma=15)
@@ -216,16 +230,10 @@ if __name__ == '__main__':
         print('Start testing SOTS...')
         test_Derain_Dehaze(net, derain_set, task="dehaze")
 
-    elif testopt.mode == 6:
+    elif testopt.mode == '5task':
         for testset,name in zip(denoise_tests,denoise_splits) :
-            print('Start {} testing Sigma=15...'.format(name))
-            test_Denoise(net, testset, sigma=15)
-
             print('Start {} testing Sigma=25...'.format(name))
             test_Denoise(net, testset, sigma=25)
-
-            print('Start {} testing Sigma=50...'.format(name))
-            test_Denoise(net, testset, sigma=50)
 
         derain_base_path = testopt.derain_path
         print(derain_splits)
