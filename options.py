@@ -4,6 +4,8 @@ parser = argparse.ArgumentParser()
 
 # Input Parameters
 parser.add_argument('--cuda', type=int, default=0)
+parser.add_argument("--num_gpus",type=int,default= 4, help = "Number of GPUs to use for training")
+parser.add_argument("--seed",type=int,default=42, help = "Random Seed for Reproducibility")
 
 parser.add_argument('--epochs', type=int, default=150, help='maximum number of epochs to train the total model.')
 parser.add_argument('--batch_size', type=int,default=8,help="Batch size to use per GPU")
@@ -31,7 +33,6 @@ parser.add_argument('--output_path', type=str, default="output/", help='output s
 parser.add_argument('--ckpt_path', type=str, default="ckpt/Denoise/", help='checkpoint save path')
 parser.add_argument("--wblogger",type=str,default="AdaIR",help = "Determine to log to wandb or not and the project name")
 parser.add_argument("--ckpt_dir",type=str,default="AdaIR",help = "Name of the Directory where the checkpoint is to be saved")
-parser.add_argument("--num_gpus",type=int,default= 4, help = "Number of GPUs to use for training")
 
 options = parser.parse_args()
 
