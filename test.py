@@ -47,8 +47,8 @@ class AdaIRModel(pl.LightningModule):
 
 
 def test_Denoise(net, dataset, sigma=15):
-    output_path = testopt.output_path + 'denoise/' + str(sigma) + '/'
-    subprocess.check_output(['mkdir', '-p', output_path])
+    # output_path = testopt.output_path + 'denoise/' + str(sigma) + '/'
+    # subprocess.check_output(['mkdir', '-p', output_path])
     
     dataset.set_sigma(sigma)
     testloader = DataLoader(dataset, batch_size=1, pin_memory=True, shuffle=False, num_workers=0)
@@ -71,8 +71,8 @@ def test_Denoise(net, dataset, sigma=15):
         return [psnr.avg, ssim.avg]
 
 def test_Derain_Dehaze(net, dataset, task="derain"):
-    output_path = testopt.output_path + task + '/'
-    subprocess.check_output(['mkdir', '-p', output_path])
+    # output_path = testopt.output_path + task + '/'
+    # subprocess.check_output(['mkdir', '-p', output_path])
 
     dataset.set_dataset(task)
     testloader = DataLoader(dataset, batch_size=1, pin_memory=True, shuffle=False, num_workers=0)
@@ -94,10 +94,12 @@ def test_Derain_Dehaze(net, dataset, task="derain"):
         print("PSNR: %.2f, SSIM: %.4f" % (psnr.avg, ssim.avg))
         return [psnr.avg, ssim.avg]
 
-def print_test_result(results: dict):
+def print_test_result(results: dict, opt):
     task_num = len(results)
     avg_psnr = avg_ssim = 0.
-    print("\n================ Summary ================")
+    print("\n================ Summary =====================")
+    print(f"model: {opt.ckpt_name} | mode: {opt.mode}")
+    print("------------------------------------------------")
     for task_name, (task_psnr, task_ssim) in results.items():
         print(f"{task_name:<28} | PSNR: {task_psnr:.2f} | SSIM: {task_ssim:.4f}")
         avg_psnr += task_psnr
@@ -220,7 +222,6 @@ if __name__ == '__main__':
             test_result['denoise-50'] = test_Denoise(net, testset, sigma=50)
 
         derain_base_path = testopt.derain_path
-        print(derain_splits)
         for name in derain_splits:
 
             print('Start testing {} rain streak removal...'.format(name))
@@ -230,7 +231,7 @@ if __name__ == '__main__':
 
         print('Start testing SOTS...')
         test_result['dehaze'] = test_Derain_Dehaze(net, derain_set, task="dehaze")
-        print_test_result(test_result)
+        print_test_result(test_result, testopt)
 
     elif testopt.mode == '5task':
         deblur_base_path = testopt.gopro_path
@@ -246,7 +247,6 @@ if __name__ == '__main__':
             test_result['denoise-25'] = test_Denoise(net, testset, sigma=25)
 
         derain_base_path = testopt.derain_path
-        print(derain_splits)
         for name in derain_splits:
 
             print('Start testing {} rain streak removal...'.format(name))
@@ -264,4 +264,4 @@ if __name__ == '__main__':
             testopt.enhance_path = os.path.join(enhance_base_path,name)
             derain_set = DerainDehazeDataset(testopt,addnoise=False,sigma=55, task='enhance')
             test_result['enhance'] = test_Derain_Dehaze(net, derain_set, task="enhance")
-        print_test_result(test_result)
+        print_test_result(test_result, testopt)
