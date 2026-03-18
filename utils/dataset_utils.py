@@ -325,7 +325,7 @@ class DerainDehazeDataset(Dataset):
     def _get_gt_path(self, degraded_name):
         if self.task_idx == 0:
             gt_name = degraded_name.replace("input", "target")
-            gt_name = gt_name.replace("rain", "norain")
+            gt_name = gt_name.replace("rain-", "norain-")
         elif self.task_idx == 1:
             dir_name = degraded_name.split("input")[0] + 'target/'
             name = degraded_name.split('/')[-1].split('_')[0] + '.png'
