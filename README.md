@@ -21,27 +21,48 @@ See [INSTALL.md](INSTALL.md) for the installation of dependencies and dataset pr
 
 After preparing the training data in ```data/``` directory, use 
 ```
-python train.py
+python train.py -opt options/train/aioir_base.yml
 ```
-to start the training of the model. Use the ```de_type``` argument to choose the combination of degradation types to train on. By default it is set to all the 5 degradation tasks (denoising, deraining, dehazing, deblurring, enhancement).
+to start the training of the model.
+
+The project now supports a BasicSR-like configuration style:
+- model and architecture are managed by registries (see `models/` and `archs/`)
+- experiment settings are managed by YAML files in `options/`
+- define different model base classes and map them in `models/__init__.py`
+
+Use the `datasets.train.de_type` field in the yml to choose the combination of degradation types to train on.
 
 Example Usage: If we only want to train on deraining and dehazing:
 ```
-python train.py --de_type derain dehaze
+python train.py -opt options/train/aioir_base.yml
+```
+Then set:
+```yaml
+datasets:
+	train:
+		de_type: [derain, dehaze]
 ```
 
 ## Testing
 
-After preparing the testing data in ```test/``` directory, place the mode checkpoint file in the ```ckpt``` directory. The pre-trained model can be downloaded [here](https://drive.google.com/drive/folders/1x2LN4kWkO3S65jJlH-1INUFiYt8KFzPH?usp=sharing). To perform the evaluation, use
+After preparing the testing data in ```test/``` directory, place the model checkpoint file in the ```ckpt``` directory. The pre-trained model can be downloaded [here](https://drive.google.com/drive/folders/1x2LN4kWkO3S65jJlH-1INUFiYt8KFzPH?usp=sharing). To perform the evaluation, use
 ```
-python test.py --mode {n}
+python test.py -opt options/test/aioir_5task.yml
 ```
-```n``` is a number that can be used to set the tasks to be evaluated on, 0 for denoising, 1 for deraining, 2 for dehazing, 3 for deblurring, 4 for enhancement, 5 for three-degradation all-in-one setting and 6 for five-degradation all-in-one setting.
+
+Set `test.mode` in yml to one of:
+- `denoise`
+- `derain`
+- `dehaze`
+- `deblur`
+- `enhance`
+- `3task`
+- `5task`
 
 Example Usage: To test on all the degradation types at once, run:
 
 ```
-python test.py --mode 6
+python test.py -opt options/test/aioir_5task.yml
 ```
 <!-- 
 ## Demo

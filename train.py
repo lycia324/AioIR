@@ -1,73 +1,79 @@
+import random
+
+import lightning.pytorch as pl
+import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.loggers import TensorBoardLogger, WandbLogger
 from torch.utils.data import DataLoader
 
-from utils.dataset_utils import AdaIRTrainDataset
-from net.model import AdaIR
-from utils.schedulers import LinearWarmupCosineAnnealingLR
-import numpy as np
-import wandb
-from options import options as opt
-import lightning.pytorch as pl
-from lightning.pytorch.loggers import WandbLogger,TensorBoardLogger
-from lightning.pytorch.callbacks import ModelCheckpoint
+from datasets import build_dataset
+from models import build_model
+from utils.config import parse_yaml_opt
 
 
-class AdaIRModel(pl.LightningModule):
-    def __init__(self):
-        super().__init__()
-        self.net = AdaIR(decoder=True)
-        self.loss_fn  = nn.L1Loss()
-    
-    def forward(self,x):
-        return self.net(x)
-    
-    def training_step(self, batch, batch_idx):
-        # training_step defines the train loop.
-        # it is independent of forward
-        ([clean_name, de_id], degrad_patch, clean_patch) = batch
-        restored = self.net(degrad_patch)
+def setup_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
-        loss = self.loss_fn(restored,clean_patch)
-        # Logging to TensorBoard (if installed) by default
-        self.log("train_loss", loss)
-        return loss
-    
-    def lr_scheduler_step(self,scheduler,metric):
-        scheduler.step(self.current_epoch)
-        lr = scheduler.get_lr()
-    
-    def configure_optimizers(self):
-        optimizer = optim.AdamW(self.parameters(), lr=2e-4)
-        scheduler = LinearWarmupCosineAnnealingLR(optimizer=optimizer,warmup_epochs=15,max_epochs=180)
 
-        return [optimizer],[scheduler]
+def build_logger(opt):
+    logger_opt = opt.get("logger", {})
+    use_wandb = logger_opt.get("use_wandb", False)
+    if use_wandb:
+        return WandbLogger(
+            project=logger_opt.get("wandb_project", "AioIR"),
+            name=logger_opt.get("name", opt.get("name", "AioIR-Train")),
+        )
+    return TensorBoardLogger(save_dir=logger_opt.get("tensorboard_dir", "logs/"))
 
 
 def main():
-    print("Options")
-    print(opt)
-    if opt.wblogger is not None:
-        logger  = WandbLogger(project=opt.wblogger,name="AdaIR-Train")
-    else:
-        logger = TensorBoardLogger(save_dir = "logs/")
+    opt, opt_path = parse_yaml_opt("AioIR training")
+    print(f"Load option file: {opt_path}")
 
-    trainset = AdaIRTrainDataset(opt)
-    checkpoint_callback = ModelCheckpoint(dirpath = opt.ckpt_dir,every_n_epochs = 1,save_top_k=-1)
-    trainloader = DataLoader(trainset, batch_size=opt.batch_size, pin_memory=True, shuffle=True,
-                             drop_last=True, num_workers=opt.num_workers)
-    
-    model = AdaIRModel()
-    
-    trainer = pl.Trainer( max_epochs=opt.epochs,accelerator="gpu",
-                         devices=opt.num_gpus,strategy="ddp_find_unused_parameters_true",
-                         logger=logger,
-                         callbacks=[checkpoint_callback])
-    trainer.fit(model=model, 
-                train_dataloaders=trainloader,
-                ckpt_path=opt.ckpt_path)
+    seed = opt.get("seed", 0)
+    setup_seed(seed)
+
+    dataset_opt = opt["datasets"]["train"]
+    loader_opt = opt["datasets"]["train_loader"]
+    trainset = build_dataset(dataset_opt)
+    trainloader = DataLoader(
+        trainset,
+        batch_size=loader_opt.get("batch_size", 8),
+        shuffle=loader_opt.get("shuffle", True),
+        drop_last=loader_opt.get("drop_last", True),
+        num_workers=loader_opt.get("num_workers", 16),
+        pin_memory=loader_opt.get("pin_memory", True),
+    )
+
+    model = build_model(opt)
+
+    ckpt_opt = opt.get("path", {})
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=ckpt_opt.get("ckpt_dir", "train_ckpt"),
+        every_n_epochs=ckpt_opt.get("save_every_n_epochs", 1),
+        save_top_k=ckpt_opt.get("save_top_k", -1),
+    )
+
+    train_opt = opt.get("train", {})
+    trainer = pl.Trainer(
+        max_epochs=train_opt.get("epochs", 120),
+        accelerator=train_opt.get("accelerator", "gpu"),
+        devices=train_opt.get("devices", 1),
+        strategy=train_opt.get("strategy", "auto"),
+        logger=build_logger(opt),
+        callbacks=[checkpoint_callback],
+    )
+
+    trainer.fit(
+        model=model,
+        train_dataloaders=trainloader,
+        ckpt_path=ckpt_opt.get("resume_ckpt", None),
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
