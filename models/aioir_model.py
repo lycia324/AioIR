@@ -1,6 +1,8 @@
 from models.base_model import BaseIRModel
+from utils.registry import register_model
 
 
+@register_model("AioIRModel")
 class AioIRModel(BaseIRModel):
     def __init__(self, opt):
         super().__init__(opt)
