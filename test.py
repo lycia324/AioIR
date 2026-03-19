@@ -6,7 +6,7 @@ from tqdm import tqdm
 import torch
 from torch.utils.data import DataLoader
 
-from archs import build_network
+from net import build_network
 from datasets import build_dataset
 from utils.config import dict_to_namespace, parse_yaml_opt
 from utils.val_utils import AverageMeter, compute_psnr_ssim

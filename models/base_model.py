@@ -2,7 +2,7 @@ import lightning.pytorch as pl
 import torch.nn as nn
 import torch.optim as optim
 
-from archs import build_network
+from net import build_network
 from utils.schedulers import LinearWarmupCosineAnnealingLR
 
 

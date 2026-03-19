@@ -26,9 +26,13 @@ python train.py -opt options/train/aioir_base.yml
 to start the training of the model.
 
 The project now supports a BasicSR-like configuration style:
-- model and architecture are managed by registries (see `models/` and `archs/`)
+- model and architecture are managed by registries (see `models/` and `net/`)
 - experiment settings are managed by YAML files in `options/`
 - define different model base classes and map them in `models/__init__.py`
+
+Network registration supports BasicSR-like usage:
+- decorator registration via `@register_arch("YourArchName")`
+- automatic module discovery in `net/` for files with `_arch.py` suffix and current `OriSSM_*` modules
 
 Use the `datasets.train.de_type` field in the yml to choose the combination of degradation types to train on.
 
