@@ -27,3 +27,8 @@ def parse_yaml_opt(description):
     args = parser.parse_args()
     opt = load_yaml(args.opt)
     return opt, args.opt
+
+def print_opt(opt):
+    print("Option:")
+    for k, v in opt.items():
+        print(f"  {k}: {v}")
