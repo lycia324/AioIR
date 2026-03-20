@@ -1,7 +1,11 @@
 from models.base_model import BaseIRModel
+import torch.nn as nn
+import torch.optim as optim
 from utils.registry import register_model
 
-
+"""
+Based on PromptIRModel from https://github.com/va1shn9v/PromptIR/blob/main/train.py
+"""
 @register_model("AioIRModel")
 class AioIRModel(BaseIRModel):
     def __init__(self, opt):

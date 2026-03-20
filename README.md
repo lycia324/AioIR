@@ -34,6 +34,8 @@ datasets:
 		de_type: [derain, dehaze]
 ```
 
+For basic instruction, we offer a [PromptIR](https://github.com/va1shn9v/PromptIR) model and option file in net/PromptIR.py and options/PromptIR.yml, they are adjusted to fit this repository's structure.
+
 ## Testing
 ```
 python test.py -opt options/test/aioir_5task.yml

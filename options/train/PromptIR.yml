@@ -1,0 +1,31 @@
+name: PromptIR
+seed: 0
+
+model:
+  type: AioIRModel
+  network_g:
+    type: PromptIR
+    inp_channels: 3
+    out_channels: 3
+    dim: 48
+    patch_size: 8
+    num_blocks: [4, 6, 6, 8]
+    ffn_expansion_factor: 2.66
+    LayerNorm_type: WithBias
+    decoder: true
+    bias: false
+  
+train:
+  epochs: 120
+  accelerator: gpu
+  devices: 4
+  strategy: ddp_find_unused_parameters_true
+  optimizer_g:
+    type: AdamW
+    lr: 0.0002
+  scheduler:
+    type: LinearWarmupCosineAnnealingLR
+    warmup_epochs: 15
+    max_epochs: 150
+  pixel_opt:
+    type: L1Loss
