@@ -9,14 +9,11 @@ from torch.utils.data import DataLoader
 
 from datasets import build_dataset
 from models import build_model
-from utils.config import parse_yaml_opt
+from utils.config import parse_yaml_opt, print_opt
 
 
 def setup_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    pl.seed_everything(seed)
 
 
 def build_logger(opt):
@@ -27,12 +24,14 @@ def build_logger(opt):
             project=logger_opt.get("wandb_project", "AioIR"),
             name=logger_opt.get("name", opt.get("name", "AioIR-Train")),
         )
-    return TensorBoardLogger(save_dir=logger_opt.get("tensorboard_dir", "logs/"))
+    return TensorBoardLogger(save_dir=logger_opt.get("tensorboard_dir", "logs/"),
+                             name=logger_opt.get("name", opt.get("name", "lightning_logs")))
 
 
 def main():
     opt, opt_path = parse_yaml_opt("AioIR training")
     print(f"Load option file: {opt_path}")
+    print_opt(opt)
 
     seed = opt.get("seed", 0)
     setup_seed(seed)
@@ -42,7 +41,7 @@ def main():
     trainset = build_dataset(dataset_opt)
     trainloader = DataLoader(
         trainset,
-        batch_size=loader_opt.get("batch_size", 8),
+        batch_size=loader_opt.get("batch_size_per_gpu", 8),
         shuffle=loader_opt.get("shuffle", True),
         drop_last=loader_opt.get("drop_last", True),
         num_workers=loader_opt.get("num_workers", 16),

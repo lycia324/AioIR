@@ -89,6 +89,14 @@ def print_test_result(results: dict, mode: str, ckpt_path: str):
     print(f"Average                      | PSNR: {avg_psnr:.2f} | SSIM: {avg_ssim:.4f}")
 
 
+def append_split_if_needed(base_path: str, split: str) -> str:
+    normalized_base = os.path.normpath(base_path)
+    normalized_split = split.strip("/\\")
+    if os.path.basename(normalized_base) == normalized_split:
+        return base_path
+    return os.path.join(base_path, split)
+
+
 def main():
     opt, opt_path = parse_yaml_opt("AioIR testing")
     print(f"Load option file: {opt_path}")
@@ -131,6 +139,35 @@ def main():
         return
 
     if mode in ["3task", "5task"]:
+        if mode == "5task":
+            deblur_splits = test_opt.get("deblur_splits", ["gopro/"])
+            for split in deblur_splits:
+                common_eval_opt.gopro_path = append_split_if_needed(
+                    opt["datasets"]["common_eval"]["gopro_path"], split
+                )
+                deblur_set = build_dataset(
+                    {"type": "DerainDehazeDataset", **vars(common_eval_opt)},
+                    addnoise=False,
+                    sigma=55,
+                    task="deblur",
+                )
+                print("Start testing GOPRO...")
+                test_result["deblur"] = test_derain_dehaze(net, deblur_set, task="deblur")
+
+            enhance_splits = test_opt.get("enhance_splits", ["lol/"])
+            for split in enhance_splits:
+                common_eval_opt.enhance_path = append_split_if_needed(
+                    opt["datasets"]["common_eval"]["enhance_path"], split
+                )
+                enhance_set = build_dataset(
+                    {"type": "DerainDehazeDataset", **vars(common_eval_opt)},
+                    addnoise=False,
+                    sigma=55,
+                    task="enhance",
+                )
+                print("Start testing LOL...")
+                test_result["enhance"] = test_derain_dehaze(net, enhance_set, task="enhance")
+        
         denoise_sigma = test_opt.get("denoise_sigma", [25]) if mode == "5task" else [15, 25, 50]
         for split, denoise_set in denoise_tests:
             for sigma in denoise_sigma:
@@ -150,37 +187,24 @@ def main():
             test_result["derain"] = test_derain_dehaze(net, derain_set, task="derain")
             test_result["dehaze"] = test_derain_dehaze(net, derain_set, task="dehaze")
 
-        if mode == "5task":
-            deblur_splits = test_opt.get("deblur_splits", ["gopro/"])
-            for split in deblur_splits:
-                common_eval_opt.gopro_path = os.path.join(opt["datasets"]["common_eval"]["gopro_path"], split)
-                deblur_set = build_dataset(
-                    {"type": "DerainDehazeDataset", **vars(common_eval_opt)},
-                    addnoise=False,
-                    sigma=55,
-                    task="deblur",
-                )
-                print("Start testing GOPRO...")
-                test_result["deblur"] = test_derain_dehaze(net, deblur_set, task="deblur")
-
-            enhance_splits = test_opt.get("enhance_splits", ["lol/"])
-            for split in enhance_splits:
-                common_eval_opt.enhance_path = os.path.join(opt["datasets"]["common_eval"]["enhance_path"], split)
-                enhance_set = build_dataset(
-                    {"type": "DerainDehazeDataset", **vars(common_eval_opt)},
-                    addnoise=False,
-                    sigma=55,
-                    task="enhance",
-                )
-                print("Start testing LOL...")
-                test_result["enhance"] = test_derain_dehaze(net, enhance_set, task="enhance")
+        
 
         print_test_result(test_result, mode, ckpt_path)
         return
 
     if mode in ["derain", "dehaze", "deblur", "enhance"]:
+        eval_opt = dict(opt["datasets"]["common_eval"])
+        if mode == "deblur":
+            deblur_splits = test_opt.get("deblur_splits", ["gopro/"])
+            deblur_split = deblur_splits[0]
+            eval_opt["gopro_path"] = append_split_if_needed(eval_opt["gopro_path"], deblur_split)
+        if mode == "enhance":
+            enhance_splits = test_opt.get("enhance_splits", ["lol/"])
+            enhance_split = enhance_splits[0]
+            eval_opt["enhance_path"] = append_split_if_needed(eval_opt["enhance_path"], enhance_split)
+
         eval_set = build_dataset(
-            {"type": "DerainDehazeDataset", **opt["datasets"]["common_eval"]},
+            {"type": "DerainDehazeDataset", **eval_opt},
             addnoise=False,
             sigma=15,
             task=mode,
