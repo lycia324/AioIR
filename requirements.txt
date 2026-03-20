@@ -1,0 +1,12 @@
+einops
+lightning
+matplotlib
+numpy
+Pillow
+PyYAML
+scikit_image
+scikit_video
+scipy
+torch
+torchvision
+tqdm
