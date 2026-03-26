@@ -1,0 +1,41 @@
+name: PromptIR-test
+seed: 0
+
+model:
+  type: AioIRModel
+  network_g:
+    type: PromptIR
+    inp_channels: 3
+    out_channels: 3
+    dim: 48
+    patch_size: 8
+    num_blocks: [4, 6, 6, 8]
+    ffn_expansion_factor: 2.66
+    LayerNorm_type: WithBias
+    decoder: true
+    bias: false
+
+path:
+  ckpt_path: train_ckpt/PromptIR/epoch=119-step=0.ckpt
+  state_dict_prefix: net.
+
+datasets:
+  denoise:
+    type: DenoiseTestDataset
+    denoise_path: data/test/denoise/
+
+  common_eval:
+    derain_path: data/test/derain/
+    dehaze_path: data/test/dehaze/
+    gopro_path: data/test/deblur/
+    enhance_path: data/test/enhance/
+
+test:
+  cuda: 0
+  mode: 5task
+  denoise_splits: [bsd68/]
+  denoise_sigma: [25]
+  derain_splits: [Rain100L/]
+  deblur_splits: [gopro/]
+  enhance_splits: [lol/]
+

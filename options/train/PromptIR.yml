@@ -14,7 +14,7 @@ model:
     LayerNorm_type: WithBias
     decoder: true
     bias: false
-  
+
 train:
   epochs: 120
   accelerator: gpu
@@ -29,3 +29,34 @@ train:
     max_epochs: 150
   pixel_opt:
     type: L1Loss
+
+datasets:
+  train:
+    type: AioIRTrainDataset
+    data_file_dir: data_dir/
+    denoise_dir: data/train/denoise/
+    derain_dir: data/train/derain/
+    dehaze_dir: data/train/dehaze/synthetic/
+    gopro_dir: data/train/deblur/
+    enhance_dir: data/train/enhance/
+    patch_size: 128
+    de_type: [denoise_15, denoise_25, denoise_50, derain, dehaze, deblur, enhance]
+
+  train_loader:
+    batch_size_per_gpu: 8
+    shuffle: true
+    drop_last: true
+    num_workers: 16
+    pin_memory: true
+
+path:
+  ckpt_dir: train_ckpt/PromptIR
+  save_every_n_epochs: 1
+  save_top_k: -1
+  resume_ckpt: null
+
+logger:
+  use_wandb: false
+  wandb_project: AioIR
+  name: PromptIR
+  tensorboard_dir: logs/
