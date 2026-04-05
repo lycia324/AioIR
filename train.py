@@ -1,6 +1,7 @@
 import random
 import json
 import os
+from glob import glob
 
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -16,17 +17,131 @@ def setup_seed(seed):
     pl.seed_everything(seed)
 
 
-def build_logger(opt):
+def _find_latest_ckpt(ckpt_dir):
+    if not ckpt_dir or not os.path.isdir(ckpt_dir):
+        return None
+
+    last_ckpt = os.path.join(ckpt_dir, "last.ckpt")
+    if os.path.isfile(last_ckpt):
+        return last_ckpt
+
+    candidates = glob(os.path.join(ckpt_dir, "*.ckpt"))
+    if not candidates:
+        return None
+
+    candidates.sort(key=os.path.getmtime, reverse=True)
+    return candidates[0]
+
+
+def resolve_resume_ckpt(opt):
+    ckpt_opt = opt.get("path", {})
+    explicit_ckpt = ckpt_opt.get("resume_ckpt", None)
+    if explicit_ckpt:
+        if os.path.isfile(explicit_ckpt):
+            print(f"Resume from configured ckpt: {explicit_ckpt}")
+            return explicit_ckpt
+        print(f"Configured resume_ckpt does not exist: {explicit_ckpt}")
+
+    auto_resume = ckpt_opt.get("auto_resume", True)
+    if not auto_resume:
+        return None
+
+    latest_ckpt = _find_latest_ckpt(ckpt_opt.get("ckpt_dir", None))
+    if latest_ckpt:
+        print(f"Auto resume from latest ckpt: {latest_ckpt}")
+    return latest_ckpt
+
+
+def _parse_tb_version(dirname):
+    if dirname.startswith("version_"):
+        suffix = dirname[len("version_") :]
+        if suffix.isdigit():
+            return int(suffix)
+        return None
+    if dirname.isdigit():
+        return int(dirname)
+    return None
+
+
+def _find_latest_tb_version(save_dir, name):
+    root = os.path.join(save_dir, name)
+    if not os.path.isdir(root):
+        return None
+
+    versions = []
+    for entry in os.listdir(root):
+        entry_path = os.path.join(root, entry)
+        if not os.path.isdir(entry_path):
+            continue
+        version_num = _parse_tb_version(entry)
+        if version_num is not None:
+            versions.append(version_num)
+
+    if not versions:
+        return None
+    return max(versions)
+
+
+def _load_wandb_run_id(ckpt_dir):
+    if not ckpt_dir:
+        return None
+    run_id_path = os.path.join(ckpt_dir, ".wandb_run_id")
+    if not os.path.isfile(run_id_path):
+        return None
+
+    with open(run_id_path, "r", encoding="utf-8") as f:
+        run_id = f.read().strip()
+    return run_id or None
+
+
+def _save_wandb_run_id(logger, ckpt_dir):
+    if not isinstance(logger, WandbLogger) or not ckpt_dir:
+        return
+
+    if int(os.environ.get("LOCAL_RANK", "0")) != 0:
+        return
+
+    run_id = getattr(logger, "version", None)
+    if not run_id:
+        return
+
+    os.makedirs(ckpt_dir, exist_ok=True)
+    run_id_path = os.path.join(ckpt_dir, ".wandb_run_id")
+    with open(run_id_path, "w", encoding="utf-8") as f:
+        f.write(f"{run_id}\n")
+
+
+def build_logger(opt, is_resuming=False):
     logger_opt = opt.get("logger", {})
+    ckpt_opt = opt.get("path", {})
     use_wandb = logger_opt.get("use_wandb", False)
     if use_wandb:
+        wandb_kwargs = {}
+        wandb_id = logger_opt.get("wandb_id", None)
+        if wandb_id is None and is_resuming:
+            wandb_id = _load_wandb_run_id(ckpt_opt.get("ckpt_dir", None))
+        if wandb_id:
+            wandb_kwargs["id"] = wandb_id
+            wandb_kwargs["resume"] = "allow"
+            print(f"Reuse WandB run id: {wandb_id}")
         return WandbLogger(
             project=logger_opt.get("wandb_project", "AioIR"),
             name=logger_opt.get("name", opt.get("name", "AioIR-Train")),
+            **wandb_kwargs,
         )
+
+    logger_name = logger_opt.get("name", opt.get("name", "lightning_logs"))
+    tensorboard_dir = logger_opt.get("tensorboard_dir", "logs/")
+    version = logger_opt.get("version", None)
+    if version is None and is_resuming:
+        version = _find_latest_tb_version(tensorboard_dir, logger_name)
+        if version is not None:
+            print(f"Reuse TensorBoard version: {version}")
+
     return TensorBoardLogger(
-        save_dir=logger_opt.get("tensorboard_dir", "logs/"),
-        name=logger_opt.get("name", opt.get("name", "lightning_logs")),
+        save_dir=tensorboard_dir,
+        name=logger_name,
+        version=version,
     )
 
 
@@ -194,9 +309,14 @@ def main():
         model.set_val_task_names(val_task_names)
 
     ckpt_opt = opt.get("path", {})
+    resume_ckpt = resolve_resume_ckpt(opt)
+    logger = build_logger(opt, is_resuming=resume_ckpt is not None)
+    _save_wandb_run_id(logger, ckpt_opt.get("ckpt_dir", None))
+
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckpt_opt.get("ckpt_dir", "train_ckpt"),
         every_n_epochs=ckpt_opt.get("save_every_n_epochs", 1),
+        save_on_train_epoch_end=True,
         save_top_k=ckpt_opt.get("save_top_k", -1),
     )
 
@@ -212,7 +332,7 @@ def main():
         accelerator=train_opt.get("accelerator", "gpu"),
         devices=train_opt.get("devices", 1),
         strategy=train_opt.get("strategy", "auto"),
-        logger=build_logger(opt),
+        logger=logger,
         callbacks=[checkpoint_callback],
         **trainer_kwargs,
     )
@@ -220,7 +340,7 @@ def main():
     fit_kwargs = {
         "model": model,
         "train_dataloaders": trainloader,
-        "ckpt_path": ckpt_opt.get("resume_ckpt", None),
+        "ckpt_path": resume_ckpt,
     }
     if val_loaders is not None:
         fit_kwargs["val_dataloaders"] = val_loaders
